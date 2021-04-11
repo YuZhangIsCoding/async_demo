@@ -1,11 +1,12 @@
-from async_demo.simulator.Simulator import Simulator
-from typing import Iterable, Union
 import threading
-from async_demo.util import getLogger, time_it
-import attr
 import time
 from concurrent.futures import ThreadPoolExecutor
+from typing import Iterable, Union
 
+import attr
+
+from async_demo.simulator.Simulator import Simulator
+from async_demo.util import getLogger, time_it
 
 LOGGER = getLogger(__name__)
 
@@ -35,7 +36,9 @@ class ThreadingUnsafeSimulator(NaiveThreadingSimulator):
 
     def simulate_IO(self, task_no: int, lag: Union[int, float], *args, **kwargs):
         """add a lag to simulate the race conditions"""
-        LOGGER.info(f"Start simulating task {task_no} for {self.scale * lag:.3f} second(s) ...")
+        LOGGER.info(
+            f"Start simulating task {task_no} for {self.scale * lag:.3f} second(s) ..."
+        )
         time.sleep(self.scale * lag)
         LOGGER.info(f"Complete simulation of task {task_no}")
 
@@ -56,7 +59,9 @@ class ThreadingLockSimulator(NaiveThreadingSimulator):
 
     def simulate_IO(self, task_no: int, lag: Union[int, float], *args, **kwargs):
         """Simulate IO-bound work"""
-        LOGGER.info(f"Start simulating task {task_no} for {self.scale * lag:.3f} second(s) ...")
+        LOGGER.info(
+            f"Start simulating task {task_no} for {self.scale * lag:.3f} second(s) ..."
+        )
         time.sleep(self.scale * lag)
         LOGGER.info(f"Complete simulation of task {task_no}")
 

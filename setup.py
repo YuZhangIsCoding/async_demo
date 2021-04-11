@@ -27,6 +27,7 @@ __name__ = "async_demo"
 __version__ = f"0.1.0{_get_version_suffix()}"
 
 setup(
+    install_requires=["click", "attrs", "aiostream"],
     name="async_demo",
     verion="0.1.0",
     author="Yu Zhang",
@@ -34,9 +35,5 @@ setup(
     description="This is a demo fof async programming in python",
     packages=find_packages(exclude=["tests.*", "tests", "*.tests"]),
     python_requires=">=3.7",
-    entry_points={
-        "console_scripts": [
-            "async_demo=async_demo.__main__:main"
-        ]
-    },
+    entry_points={"console_scripts": ["async_demo=async_demo.__main__:main"]},
 )

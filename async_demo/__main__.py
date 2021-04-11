@@ -1,24 +1,25 @@
 #!/usr/bin/env python
 import click
 
-from .__init__ import __version__
+from async_demo.simulator.AsyncSimulator import (
+    AsyncBatchSimulator,
+    AsyncGeneratorSimulator,
+    AsyncQueueSimulator,
+    AsyncSafeSimulator,
+    AsyncSemaphoreSimulator,
+    AsyncSimulator,
+    AsyncUnsafeSimulator,
+)
 from async_demo.simulator.Simulator import Simulator
 from async_demo.simulator.ThreadingSimulator import (
     NaiveThreadingSimulator,
-    ThreadingUnsafeSimulator,
     ThreadingLockSimulator,
     ThreadingPoolSimulator,
-)
-from async_demo.simulator.AsyncSimulator import (
-    AsyncUnsafeSimulator,
-    AsyncSafeSimulator,
-    AsyncSimulator,
-    AsyncBatchSimulator,
-    AsyncQueueSimulator,
-    AsyncSemaphoreSimulator,
-    AsyncGeneratorSimulator,
+    ThreadingUnsafeSimulator,
 )
 from async_demo.util import getLogger
+
+from .__init__ import __version__
 
 LOGGER = getLogger(__name__)
 
@@ -30,7 +31,9 @@ def main():
 
 
 @main.command(help="Show the potential race condition in the multi-threading approach ")
-@click.option("--n-time", type=click.IntRange(min=1, max=10), default=2, help="Number of times")
+@click.option(
+    "--n-time", type=click.IntRange(min=1, max=10), default=2, help="Number of times"
+)
 def show_race(n_time: int):
     times = [1 for _ in range(n_time)]
 

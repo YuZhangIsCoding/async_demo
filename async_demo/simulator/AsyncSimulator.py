@@ -1,12 +1,22 @@
-from async_demo.simulator.Simulator import Simulator
-from async_demo.util import getLogger, time_it
-from typing import Iterable, Union, Callable, Awaitable, Iterator, AsyncIterator, TypeVar
 import asyncio
+import time
 from functools import wraps
+from itertools import islice
+from typing import (
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Iterable,
+    Iterator,
+    TypeVar,
+    Union,
+)
+
 import aiostream
 import attr
-from itertools import islice
-import time
+
+from async_demo.simulator.Simulator import Simulator
+from async_demo.util import getLogger, time_it
 
 T = TypeVar("T")
 LOGGER = getLogger(__name__)
@@ -38,12 +48,12 @@ async def async_generator(it: Iterable[T]) -> AsyncIterator[T]:
         yield i
 
 
-
 class AsyncSimulator(Simulator):
-
     async def simulate_IO(self, task_no: int, lag: Union[int, float], *args, **kwargs):
         """Simulate IO-bound work"""
-        LOGGER.info(f"Start simulating task {task_no} for {self.scale * lag:.3f} second(s) ...")
+        LOGGER.info(
+            f"Start simulating task {task_no} for {self.scale * lag:.3f} second(s) ..."
+        )
         await asyncio.sleep(self.scale * lag)
         LOGGER.info(f"Complete simulation of task {task_no}")
         self.count += 1
@@ -60,10 +70,11 @@ class AsyncSimulator(Simulator):
 
 
 class AsyncUnsafeSimulator(AsyncSimulator):
-
     async def simulate_IO(self, task_no: int, lag: Union[int, float], *args, **kwargs):
         """Simulate IO-bound work"""
-        LOGGER.info(f"Start simulating task {task_no} for {self.scale * lag:.3f} second(s) ...")
+        LOGGER.info(
+            f"Start simulating task {task_no} for {self.scale * lag:.3f} second(s) ..."
+        )
         await asyncio.sleep(self.scale * lag)
         LOGGER.info(f"Complete simulation of task {task_no}")
 
@@ -75,10 +86,11 @@ class AsyncUnsafeSimulator(AsyncSimulator):
 
 
 class AsyncSafeSimulator(AsyncSimulator):
-
     async def simulate_IO(self, task_no: int, lag: Union[int, float], *args, **kwargs):
         """Simulate IO-bound work"""
-        LOGGER.info(f"Start simulating task {task_no} for {self.scale * lag:.3f} second(s) ...")
+        LOGGER.info(
+            f"Start simulating task {task_no} for {self.scale * lag:.3f} second(s) ..."
+        )
         await asyncio.sleep(self.scale * lag)
         LOGGER.info(f"Complete simulation of task {task_no}")
 
@@ -87,6 +99,7 @@ class AsyncSafeSimulator(AsyncSimulator):
         time.sleep(self.scale)
         self.count = tmp
         LOGGER.debug(f"Count updated for task {task_no} as {self.count}")
+
 
 @attr.s(auto_attribs=True)
 class AsyncBatchSimulator(AsyncSimulator):
@@ -99,7 +112,10 @@ class AsyncBatchSimulator(AsyncSimulator):
         for batch_idx, batch in enumerate(batcher(it, self.max_concurrency)):
             LOGGER.info(f"Processing batch {batch_idx}")
             await asyncio.gather(
-                *[self.simulate_IO(i+batch_idx*self.max_concurrency, t) for i, t in enumerate(batch)]
+                *[
+                    self.simulate_IO(i + batch_idx * self.max_concurrency, t)
+                    for i, t in enumerate(batch)
+                ]
             )
 
 
@@ -113,7 +129,9 @@ class AsyncQueueSimulator(AsyncSimulator):
         """Have the working running items from the queue until the queue is empty"""
         while not queue.empty():
             task_no, lag = await queue.get()
-            LOGGER.info(f"Worker {worker} starts simulating task {task_no} for {self.scale * lag:.3f} second(s) ...")
+            LOGGER.info(
+                f"Worker {worker} starts simulating task {task_no} for {self.scale * lag:.3f} second(s) ..."
+            )
             await asyncio.sleep(self.scale * lag)
             queue.task_done()
             LOGGER.info(f"Complete simulation of task {task_no}")
@@ -125,7 +143,10 @@ class AsyncQueueSimulator(AsyncSimulator):
         for i, t in enumerate(it):
             LOGGER.info(f"Putting task {i} in the queue ...")
             queue.put_nowait((i, t))
-        tasks = [asyncio.create_task(self.simulate_IO(worker, queue)) for worker in range(self.max_concurrency)]
+        tasks = [
+            asyncio.create_task(self.simulate_IO(worker, queue))
+            for worker in range(self.max_concurrency)
+        ]
         await queue.join()
 
         for task in tasks:
@@ -143,7 +164,9 @@ class AsyncSemaphoreSimulator(AsyncSimulator):
     async def simulate_IO(self, task_no: int, lag: Union[int, float], *args, **kwargs):
         """Simulate IO-bound work"""
         async with self.sem:
-            LOGGER.info(f"Start simulating task {task_no} for {self.scale * lag:.3f} second(s) ...")
+            LOGGER.info(
+                f"Start simulating task {task_no} for {self.scale * lag:.3f} second(s) ..."
+            )
             await asyncio.sleep(self.scale * lag)
             LOGGER.info(f"Complete simulation of task {task_no}")
             self.count += 1
@@ -155,8 +178,11 @@ class AsyncSemaphoreSimulator(AsyncSimulator):
 
 
 class AsyncGeneratorSimulator(AsyncSimulator):
-
     @async_run
     async def _run(self, it: Iterable[Union[int, float]]):
-        await asyncio.gather(*[self.simulate_IO(i, t) async for i, t in aiostream.stream.enumerate(async_generator(it))])
-
+        await asyncio.gather(
+            *[
+                self.simulate_IO(i, t)
+                async for i, t in aiostream.stream.enumerate(async_generator(it))
+            ]
+        )

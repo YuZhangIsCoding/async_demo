@@ -1,7 +1,9 @@
-import attr
-from async_demo.util import getLogger, time_it
 import time
 from typing import Iterable, Union
+
+import attr
+
+from async_demo.util import getLogger, time_it
 
 LOGGER = getLogger(__name__)
 
@@ -16,7 +18,9 @@ class Simulator:
 
     def simulate_IO(self, task_no: int, lag: Union[int, float], *args, **kwargs):
         """Simulate IO-bound work"""
-        LOGGER.info(f"Start simulating task {task_no} for {self.scale * lag:.3f} second(s) ...")
+        LOGGER.info(
+            f"Start simulating task {task_no} for {self.scale * lag:.3f} second(s) ..."
+        )
         time.sleep(self.scale * lag)
         LOGGER.info(f"Complete simulation of task {task_no}")
         self.count += 1

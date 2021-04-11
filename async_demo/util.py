@@ -1,12 +1,14 @@
-import time
-from typing import Callable, Optional
-import os
-import logging
-from functools import wraps
 import inspect
+import logging
+import os
+import time
+from functools import wraps
+from typing import Callable, Optional
 
 LOGLEVEL = os.environ.get("LOGLEVEL", logging.INFO)
-logging.basicConfig(level=LOGLEVEL, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=LOGLEVEL, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 
 
 def getLogger(name: Optional[str] = None) -> logging.Logger:
