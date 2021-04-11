@@ -30,7 +30,7 @@ setup(
     name="async_demo",
     verion="0.1.0",
     author="Yu Zhang",
-    author_email="Yu Zhang",
+    author_email="yuzhang23333@gmail.com",
     description="This is a demo fof async programming in python",
     packages=find_packages(exclude=["tests.*", "tests", "*.tests"]),
     python_requires=">=3.7",
