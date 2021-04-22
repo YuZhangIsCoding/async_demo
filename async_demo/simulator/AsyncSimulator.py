@@ -8,6 +8,7 @@ from typing import (
     Callable,
     Iterable,
     Iterator,
+    Set,
     TypeVar,
     Union,
 )
@@ -32,7 +33,7 @@ def async_run(func: Callable[..., Awaitable]) -> Callable:
     return wrapper
 
 
-def batcher(it: Iterable[T], size: int = 1) -> Iterator[T]:
+def _batcher(it: Iterable[T], size: int = 1) -> Iterator[T]:
     """Batch generator, sliced by size"""
     stream = iter(it)
 
@@ -42,7 +43,7 @@ def batcher(it: Iterable[T], size: int = 1) -> Iterator[T]:
     yield from iter(_slice, [])
 
 
-async def async_generator(it: Iterable[T]) -> AsyncIterator[T]:
+async def _async_generator(it: Iterable[T]) -> AsyncIterator[T]:
     """Make an async generator from an iterable"""
     for i in it:
         yield i
@@ -67,6 +68,18 @@ class AsyncSimulator(Simulator):
         self._run(it)
         LOGGER.debug(f"Final count for `{self.__class__.__name__}`: {self.count}")
         return self.count
+
+
+class AsyncGeneratorSimulator(AsyncSimulator):
+    @async_run
+    async def _run(self, it: Iterable[Union[int, float]]):
+        """aiostream.stream provides additional iter tools for async generator"""
+        await asyncio.gather(
+            *[
+                self.simulate_IO(i, t)
+                async for i, t in aiostream.stream.enumerate(_async_generator(it))
+            ]
+        )
 
 
 class AsyncUnsafeSimulator(AsyncSimulator):
@@ -109,7 +122,8 @@ class AsyncBatchSimulator(AsyncSimulator):
 
     @async_run
     async def _run(self, it: Iterable[Union[int, float]]):
-        for batch_idx, batch in enumerate(batcher(it, self.max_concurrency)):
+        """Send the iterables in batches, the next batch will be process only when all of the previous batch is done"""
+        for batch_idx, batch in enumerate(_batcher(it, self.max_concurrency)):
             LOGGER.info(f"Processing batch {batch_idx}")
             await asyncio.gather(
                 *[
@@ -125,26 +139,21 @@ class AsyncQueueSimulator(AsyncSimulator):
 
     max_concurrency: int = 2
 
-    async def simulate_IO(self, worker: int, queue: asyncio.Queue, *args, **kwargs):
-        """Have the working running items from the queue until the queue is empty"""
+    async def run_queue(self, worker: int, queue: asyncio.Queue):
         while not queue.empty():
             task_no, lag = await queue.get()
-            LOGGER.info(
-                f"Worker {worker} starts simulating task {task_no} for {self.scale * lag:.3f} second(s) ..."
-            )
-            await asyncio.sleep(self.scale * lag)
+            LOGGER.info(f"Worker {worker} get task {task_no} ...")
+            await self.simulate_IO(task_no, lag)
             queue.task_done()
-            LOGGER.info(f"Complete simulation of task {task_no}")
-            self.count += 1
 
     @async_run
     async def _run(self, it: Iterable[Union[int, float]]):
-        queue = asyncio.Queue()
+        queue: asyncio.Queue = asyncio.Queue()
         for i, t in enumerate(it):
             LOGGER.info(f"Putting task {i} in the queue ...")
             queue.put_nowait((i, t))
         tasks = [
-            asyncio.create_task(self.simulate_IO(worker, queue))
+            asyncio.create_task(self.run_queue(worker, queue))
             for worker in range(self.max_concurrency)
         ]
         await queue.join()
@@ -162,7 +171,7 @@ class AsyncSemaphoreSimulator(AsyncSimulator):
     sem = attr.ib(init=False)
 
     async def simulate_IO(self, task_no: int, lag: Union[int, float], *args, **kwargs):
-        """Simulate IO-bound work"""
+        """Semaphone puts a limit on the number of tasks to be processes concurrently"""
         async with self.sem:
             LOGGER.info(
                 f"Start simulating task {task_no} for {self.scale * lag:.3f} second(s) ..."
@@ -177,12 +186,21 @@ class AsyncSemaphoreSimulator(AsyncSimulator):
         await asyncio.gather(*[self.simulate_IO(i, t) for i, t in enumerate(it)])
 
 
-class AsyncGeneratorSimulator(AsyncSimulator):
+@attr.s(auto_attribs=True)
+class AsyncFutureSimulator(AsyncSimulator):
+
+    max_concurrency: int = 2
+
     @async_run
     async def _run(self, it: Iterable[Union[int, float]]):
-        await asyncio.gather(
-            *[
-                self.simulate_IO(i, t)
-                async for i, t in aiostream.stream.enumerate(async_generator(it))
-            ]
-        )
+        """Similar to the usage of concurrent.futures"""
+        futures: Set[asyncio.Future] = set()
+        for i, t in enumerate(it):
+            if len(futures) >= self.max_concurrency:
+                futures_done, futures = await asyncio.wait(
+                    futures, return_when=asyncio.FIRST_COMPLETED
+                )
+            futures.add(asyncio.create_task(self.simulate_IO(i, t)))
+
+        # finish the remaining futures
+        futures_done, _ = await asyncio.wait(futures)

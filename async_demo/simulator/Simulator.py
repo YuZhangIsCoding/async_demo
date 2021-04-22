@@ -13,7 +13,7 @@ class Simulator:
     """This is the basic class for the simulation of processing common IO-bound works"""
 
     count: int = 0
-    scale: float = 0.01
+    scale: float = 0.1
     race: bool = True
 
     def simulate_IO(self, task_no: int, lag: Union[int, float], *args, **kwargs):

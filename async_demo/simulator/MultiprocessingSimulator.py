@@ -1,6 +1,6 @@
 import time
-from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
-from threading import Lock, Thread
+from concurrent.futures import FIRST_COMPLETED, Future, ProcessPoolExecutor, wait
+from multiprocessing import Process, Queue
 from typing import Iterable, Set, Union
 
 import attr
@@ -11,26 +11,24 @@ from async_demo.util import getLogger, time_it
 LOGGER = getLogger(__name__)
 
 
-class NaiveThreadingSimulator(Simulator):
-    """Using the threading module to simulator the multi-threading process for IO-bound problems"""
-
+class MultiprocessingSimulator(Simulator):
     @time_it
     def run(self, it: Iterable[Union[int, float]]) -> int:
         """multi-threading run"""
-        threads = [
-            Thread(target=self.simulate_IO, args=(i, t)) for i, t in enumerate(it)
+        processes = [
+            Process(target=self.simulate_IO, args=(i, t)) for i, t in enumerate(it)
         ]
-        for thread in threads:
-            thread.start()
-        for thread in threads:
-            thread.join()
+        for process in processes:
+            process.start()
+        for process in processes:
+            process.join()
         LOGGER.debug(f"Final count for `{self.__class__.__name__}`: {self.count}")
 
         return self.count
 
 
 @attr.s(auto_attribs=True)
-class ThreadingUnsafeSimulator(NaiveThreadingSimulator):
+class MultiprocessingUnsafeSimulator(MultiprocessingSimulator):
     """This is to illustrate multi-threading could raise race conditions"""
 
     def simulate_IO(self, task_no: int, lag: Union[int, float], *args, **kwargs):
@@ -51,10 +49,8 @@ class ThreadingUnsafeSimulator(NaiveThreadingSimulator):
 
 
 @attr.s(auto_attribs=True)
-class ThreadingLockSimulator(NaiveThreadingSimulator):
+class MultiprocessingQueueSimulator(MultiprocessingSimulator):
     """Use lock to prevent race conditions"""
-
-    lock = Lock()
 
     def simulate_IO(self, task_no: int, lag: Union[int, float], *args, **kwargs):
         """Simulate IO-bound work"""
@@ -65,25 +61,40 @@ class ThreadingLockSimulator(NaiveThreadingSimulator):
         LOGGER.info(f"Complete simulation of task {task_no}")
 
         LOGGER.debug(f"Update the count for task {task_no}")
-        with self.lock:
-            # within this lock, variables are locked by a thread, which means other threads cannot access
-            LOGGER.debug(f"Thread is locked for task {task_no}")
-            tmp = self.count + 1
-            time.sleep(self.scale)
-            self.count = tmp
-        LOGGER.debug(f"Thread is released for task {task_no}")
-        LOGGER.debug(f"Value updated for task {task_no}")
+
+        q = kwargs["q"]
+        count = q.get()
+        time.sleep(self.scale)
+        q.put(count + 1)
+
+    @time_it
+    def run(self, it: Iterable[Union[int, float]]) -> int:
+        """multi-threading run"""
+        q = Queue()
+        q.put(self.count)
+        processes = [
+            Process(target=self.simulate_IO, args=(i, t), kwargs={"q": q})
+            for i, t in enumerate(it)
+        ]
+        for process in processes:
+            process.start()
+        for process in processes:
+            process.join()
+        self.count = q.get()
+        LOGGER.debug(f"Final count for `{self.__class__.__name__}`: {self.count}")
+
+        return self.count
 
 
 @attr.s(auto_attribs=True)
-class ThreadingPoolSimulator(NaiveThreadingSimulator):
+class MultiprocessingPoolSimulator(MultiprocessingSimulator):
     """Use the ThreadPoolExecutor instead of creating new threads every time"""
 
     max_workers: int = 2
 
     @time_it
     def run(self, it: Iterable[Union[int, float]]) -> int:
-        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+        with ProcessPoolExecutor(max_workers=self.max_workers) as executor:
             for i, t in enumerate(it):
                 executor.submit(self.simulate_IO, task_no=i, lag=t)
             # alternatively use executor.map
@@ -92,7 +103,7 @@ class ThreadingPoolSimulator(NaiveThreadingSimulator):
 
 
 @attr.s(auto_attribs=True)
-class ThreadingPoolLazySimulator(NaiveThreadingSimulator):
+class MultiprocessingPoolLazySimulator(MultiprocessingSimulator):
     """Use Future and wait to make the process less eager
 
     In addition to a pool for executors, we add another pool for the futures that the executors pool could take.
@@ -105,7 +116,7 @@ class ThreadingPoolLazySimulator(NaiveThreadingSimulator):
     @time_it
     def run(self, it: Iterable[Union[int, float]]) -> int:
         """In addition to a pool for executors"""
-        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+        with ProcessPoolExecutor(max_workers=self.max_workers) as executor:
             futures: Set[Future] = set()
             for i, t in enumerate(it):
                 if len(futures) >= self.futures_pool_size:
@@ -114,4 +125,7 @@ class ThreadingPoolLazySimulator(NaiveThreadingSimulator):
 
         # finish the rest of the futures
         futures_done, _ = wait(futures)
+
+        LOGGER.debug(f"Final count for `{self.__class__.__name__}`: {self.count}")
+
         return self.count
